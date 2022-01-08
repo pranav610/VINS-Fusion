@@ -21,6 +21,10 @@ Handler::Handler(ros::NodeHandle &nodeHandle) : nh(nodeHandle), global_octree(pc
         ROS_INFO("Parameters were not read.");
         ros::requestShutdown();
     }
+    else
+    {
+        ROS_INFO("Parameters readed .");
+    }
 }
 
 Handler::~Handler()
@@ -64,7 +68,7 @@ bool Handler::readParams()
         return false;
     ros::param::get(key, tempKey);
     Handler::cy = atof(tempKey.c_str());
-    
+
     // if (!ros::param::search("s", key))
     //     return false;
     // ros::param::get(key, Handler::s);
@@ -89,6 +93,9 @@ bool Handler::readParams()
 
 void Handler::run()
 {
+    cout << depth_topic << endl;
+    cout << vins_topic << endl;
+
     message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, depth_topic, 10);
     // message_filters::Subscriber<sensor_msgs::Image> scharr_sub(nh, scharr_topic, 10);
 
@@ -98,6 +105,7 @@ void Handler::run()
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::Odometry, sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), vins_sub, depth_sub);
 
+    ROS_INFO("Subscribed topics now going into callback.\n");
     sync.registerCallback(boost::bind(&Handler::optimize, this, _1, _2));
     ros::spin();
 }
@@ -105,6 +113,7 @@ void Handler::run()
 void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
                        const sensor_msgs::Image::ConstPtr &depth_img)
 {
+    ROS_INFO("Call back function is being called.\n");
     // qt = tf_msg->transform.rotation;
     // t = tf_msg->transform.translation;
 
@@ -139,7 +148,7 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     float radius = RADIUS;
     std::vector<int> pointIdxRadiusSearch;
     std::vector<float> pointRadiusSquaredDistance;
-
+    ROS_INFO("Imaged read and now going into ceres solver.\n");
     if (global_octree.radiusSearch(center, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
     {
         for (std::size_t i = 0; i < pointIdxRadiusSearch.size(); ++i)
@@ -147,7 +156,7 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
             p(0) = (*merged)[pointIdxRadiusSearch[i]].x;
             p(1) = (*merged)[pointIdxRadiusSearch[i]].y;
             p(2) = (*merged)[pointIdxRadiusSearch[i]].z;
-
+            ROS_INFO("%ld points added to ceres solver\n", i);
             if ((Cam_Proj * (_TCM * p))(0) >= 0 && (Cam_Proj * (_TCM * p))(1) >= 0 && (Cam_Proj * (_TCM * p))(0) <= cv_ptr1->image.rows && (Cam_Proj * (_TCM * p))(1) <= cv_ptr1->image.cols)
             {
                 ceres::CostFunction *cost_func = new Localize(_TCM, p, cv_ptr1->image, cv_ptr2->image, D_Camera_Proj_fn, Cam_Proj);
@@ -161,7 +170,9 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
         options.minimizer_progress_to_stdout = true;
 
         ceres::Solver::Summary summary;
+        ROS_INFO("Data loaded to the solver and solving is started\n");
         ceres::Solve(options, &problem, &summary);
+        ROS_INFO("Solved gg.\n");
     }
     Eigen::Matrix4f teps = Eigen::Matrix4f::Identity();
     teps(0, 1) = -params[2];
@@ -184,6 +195,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh_ceres;
 
     Handler a(nh_ceres);
+    a.run();
 
     return 0;
 }

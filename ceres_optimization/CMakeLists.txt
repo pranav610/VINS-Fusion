@@ -57,9 +57,9 @@ include_directories(
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-add_executable (${PROJECT_NAME} 
+add_executable (final 
   src/Localize.cpp 
   src/Handler.cpp
 )
 
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES})
+target_link_libraries(final ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES})

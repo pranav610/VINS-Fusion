@@ -5,13 +5,13 @@
 imu: 1         
 num_of_cam: 1  
 
-imu_topic: "/carla/vehicle/086/odometry"
+imu_topic: "/carla/vehicle/086/imu/default"
 image0_topic: "/carla/vehicle/086/camera/rgb/front/image_color"
-image1_topic: "/cam1/image_raw"
+image1_topic: "/carla/vehicle/086/camera/rgb/front/image_color"
 output_path: "~/output/"
 
 cam0_calib: "mycam_0.yaml"
-cam1_calib: "cam1_mei.yaml"
+cam1_calib: "mycam_0.yaml"
 image_width: 800
 image_height: 600
    
