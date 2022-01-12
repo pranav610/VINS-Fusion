@@ -10,12 +10,13 @@ using namespace cv;
 
 // VINS,depth map extraction, output of lego loam bor on carla, bag file - reuired
 
-Localize::Localize(Eigen::Matrix4f &TCM, Eigen::Vector4f p, Mat &disparity, Mat &scharred, Eigen::MatrixXf &D_Camera_Proj_fn, Eigen::MatrixXf &Cam_Proj)
+Localize::Localize(Eigen::Matrix4f &TCM, Eigen::Vector4f p, Mat &disparity, Mat &scharredX, Mat &scharredY ,Eigen::Matrix<float, 3,4> &D_Camera_Proj_fn, Eigen::Matrix<float, 3,4> &Cam_Proj)
 {
     TCM_ = TCM;
     p_ = p;
     disparity_ = disparity;
-    scharred_ = scharred;
+    scharredX_ = scharredX;
+    scharredY_ = scharredY;
     D_Camera_Proj_fn_ = D_Camera_Proj_fn;
     Cam_Proj_ = Cam_Proj;
 }
@@ -31,14 +32,14 @@ bool Localize::Evaluate(double const *const *parameters,
     Eigen::Matrix4f Teps_;
     Eigen::Matrix<float, 1, 3> depthJac;
 
-    depthJac << scharred_.at<double>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1), 0), scharred_.at<double>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1), 1), 1.0;
+    depthJac << scharredX_.at<uchar>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0,0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1,0)), scharredY_.at<uchar>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0,0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1,0)), 1.0;
     Teps_ << 1.0, -parameters[0][2], parameters[0][1], parameters[0][3],
         parameters[0][2], 1.0, -parameters[0][0], parameters[0][4],
         -parameters[0][1], parameters[0][0], 1.0, parameters[0][5],
         0.0, 0.0, 0.0, 1.0;
 
-    double sigma = sqrt(pow(scharred_.at<double>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1), 0), 2) + pow(scharred_.at<double>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1), 1), 2));
-    residuals[0] = (((Teps_ * (TCM_ * p_))[3]) - disparity_.at<double>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1))) / sigma;
+    double sigma = sqrt(pow(scharredX_.at<uchar>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0,0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1,0)), 2) + pow(scharredY_.at<uchar>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0,0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1,0)), 2));
+    residuals[0] = (((Teps_ * (TCM_ * p_))(2,0)) - disparity_.at<uchar>((Cam_Proj_ * (Teps_ * (TCM_ * p_)))(0,0), (Cam_Proj_ * (Teps_ * (TCM_ * p_)))(1,0))) / sigma;
     if (!jacobians)
         return true;
     double *jacobian = jacobians[0];
@@ -49,7 +50,7 @@ bool Localize::Evaluate(double const *const *parameters,
     double y = (Teps_ * (TCM_ * p_))(0, 1);
     double z = (Teps_ * (TCM_ * p_))(0, 2);
 
-    Eigen::MatrixXf D_Camera_Proj_fn = D_Camera_Proj_fn_;
+    Eigen::Matrix<float, 3,4> D_Camera_Proj_fn = D_Camera_Proj_fn_;
     D_Camera_Proj_fn(0, 0) /= z;
     D_Camera_Proj_fn(1, 1) /= z;
     D_Camera_Proj_fn(0, 2) /= (z * z);
@@ -58,29 +59,29 @@ bool Localize::Evaluate(double const *const *parameters,
     Eigen::Matrix4f temp = Eigen::Matrix4f::Zero();
     temp(1, 2) = -1.0;
     temp(2, 1) = 1.0;
-    jacobian[0] = (temp * (TCM_ * p_))[3] - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))[0];
+    jacobian[0] = (temp * (TCM_ * p_))(2,0) - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))(0,0);
 
     temp = Eigen::Matrix4f::Zero();
     temp(0, 2) = 1.0;
     temp(2, 0) = 1.0;
-    jacobian[1] = (temp * (TCM_ * p_))[3] - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))[0];
+    jacobian[1] = (temp * (TCM_ * p_))(2,0) - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))(0,0);
 
     temp = Eigen::Matrix4f::Zero();
     temp(0, 1) = -1.0;
     temp(1, 0) = 1.0;
-    jacobian[2] = (temp * (TCM_ * p_))[3] - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))[0];
+    jacobian[2] = (temp * (TCM_ * p_))(2,0) - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))(0,0);
 
     temp = Eigen::Matrix4f::Zero();
     temp(0, 3) = 1.0;
-    jacobian[3] = (temp * (TCM_ * p_))[3] - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))[0];
+    jacobian[3] = (temp * (TCM_ * p_))(2,0) - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))(0,0);
 
     temp = Eigen::Matrix4f::Zero();
     temp(1, 3) = 1.0;
-    jacobian[4] = (temp * (TCM_ * p_))[3] - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))[0];
+    jacobian[4] = (temp * (TCM_ * p_))(2,0) - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))(0,0);
 
     temp = Eigen::Matrix4f::Zero();
     temp(2, 3) = 1.0;
-    jacobian[5] = (temp * (TCM_ * p_))[3] - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))[0];
+    jacobian[5] = (temp * (TCM_ * p_))(2,0) - ((depthJac) * (D_Camera_Proj_fn) * (temp * (TCM_ * p_)))(0,0);
 
     return true;
 }

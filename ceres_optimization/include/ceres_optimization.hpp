@@ -45,7 +45,7 @@ using namespace cv;
 class Localize : public ceres::SizedCostFunction<1, 6>
 {
 public:
-    Localize(Eigen::Matrix4f &TCM, Eigen::Vector4f p, cv::Mat &disparity, cv::Mat &scharred, Eigen::MatrixXf &D_Camera_Proj_fn, Eigen::MatrixXf &Cam_Proj);
+    Localize(Eigen::Matrix4f &TCM, Eigen::Vector4f p, cv::Mat &disparity, cv::Mat &scharredX, cv::Mat &scharredY ,Eigen::Matrix<float, 3,4> &D_Camera_Proj_fn, Eigen::Matrix<float, 3,4> &Cam_Proj);
     virtual ~Localize();
     virtual bool Evaluate(double const *const *parameters,
                           double *residuals,
@@ -54,9 +54,10 @@ public:
     Eigen::Matrix4f TCM_;
     Eigen::Vector4f p_;
     cv::Mat disparity_;
-    cv::Mat scharred_;
-    Eigen::MatrixXf D_Camera_Proj_fn_;
-    Eigen::MatrixXf Cam_Proj_;
+    cv::Mat scharredX_;
+    cv::Mat scharredY_;
+    Eigen::Matrix<float, 3,4> D_Camera_Proj_fn_;
+    Eigen::Matrix<float, 3,4> Cam_Proj_;
 };
 
 class Handler
@@ -71,8 +72,8 @@ public:
     void run();
 
 private:
-    Eigen::MatrixXf D_Camera_Proj_fn;
-    Eigen::MatrixXf Cam_Proj;
+    Eigen::Matrix<float, 3,4> D_Camera_Proj_fn;
+    Eigen::Matrix<float, 3,4> Cam_Proj;
     double fx, fy, s, cx, cy;
 
     ros::NodeHandle nh;

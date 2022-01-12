@@ -14,8 +14,6 @@ Handler::Handler(ros::NodeHandle &nodeHandle) : nh(nodeHandle), global_octree(pc
     pub = nh.advertise<geometry_msgs::TransformStamped>("stereo_output", 10);
     global_octree = pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>(128.0f);
     merged = PointCloud::Ptr(new PointCloud);
-    D_Camera_Proj_fn = Eigen::MatrixXf(3, 4);
-    Cam_Proj = Eigen::MatrixXf(3, 4);
     if (!readParams())
     {
         ROS_INFO("Parameters were not read.");
@@ -102,7 +100,7 @@ void Handler::run()
     message_filters::Subscriber<nav_msgs::Odometry> vins_sub(nh, vins_topic, 10);
 
     // Ref: https://stackoverflow.com/questions/62267850/ros-c-approximate-time-synchronizer-callback-not-working-in-node-member-class
-    typedef message_filters::sync_policies::ApproximateTime<nav_msgs::Odometry, sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
+    typedef message_filters::sync_policies::ApproximateTime<nav_msgs::Odometry, sensor_msgs::Image> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), vins_sub, depth_sub);
 
     ROS_INFO("Subscribed topics now going into callback.\n");
@@ -112,7 +110,7 @@ void Handler::run()
 
 void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
                        const sensor_msgs::Image::ConstPtr &depth_img)
-{
+{   
     ROS_INFO("Call back function is being called.\n");
     // qt = tf_msg->transform.rotation;
     // t = tf_msg->transform.translation;
@@ -136,13 +134,50 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
 
     Eigen::Matrix3f R = q.normalized().toRotationMatrix();
     Eigen::Matrix4f _TCM = Eigen::Matrix4f::Zero();
-    _TCM.block<3, 3>(0, 0) = R;
-    _TCM.block<4, 1>(3, 0) = t; // Review
+    for(int i=0; i<3; i++){
+        for(int j=0; j<3; j++){
+            _TCM(i,j) = R(i,j);
+        }
+        _TCM(i,3) = t(i);
+    }
 
-    cv_bridge::CvImagePtr cv_ptr1, cv_ptr2;
-    cv_ptr1 = cv_bridge::toCvCopy(depth_img, sensor_msgs::image_encodings::BGR8);
+    // _TCM.block<3, 3>(0, 0) = R;
+    // _TCM.block<4, 1>(3, 0) = t; // Review
+
+    cv_bridge::CvImageConstPtr cv_ptr;
+    try
+    {
+        cv_ptr = cv_bridge::toCvShare(depth_img);
+
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    Mat mono8_img = cv::Mat(cv_ptr->image.size(), CV_8UC1);
+    Mat scharrX, scharrY;
+    cv::convertScaleAbs(cv_ptr->image, mono8_img, 100, 0.0);
+
+
+    // cv_bridge::CvImagePtr cv_ptr1, cv_ptr2;
+    // cv_ptr1 = cv_bridge::toCvCopy(depth_img);
+    // cv::Mat depth_float_img = cv_ptr1->image;
+    // cv::Mat depth_mono8_img;
+    // if(depth_mono8_img.rows != depth_float_img.rows || depth_mono8_img.cols != depth_float_img.cols){
+    // depth_mono8_img = cv::Mat(depth_float_img.size(), CV_8UC1);}
+    // cv::convertScaleAbs(depth_float_img, depth_mono8_img, 100, 0.0);
+
+    // cv_ptr1 = cv_bridge::toCvCopy(depth_img, std::string());
     // cv_ptr2 = cv_bridge::toCvCopy(scharr_img, sensor_msgs::image_encodings::BGR8);
-    Scharr(cv_ptr1->image, cv_ptr2->image, -1, 1, 1);
+    Scharr(mono8_img, scharrX, -1, 1, 0);
+    Scharr(mono8_img, scharrY, -1, 0, 1);
+    convertScaleAbs(scharrX, scharrX);
+    convertScaleAbs(scharrY, scharrY);
+    // int ddepth = CV_16S;
+    // int ksize = 3;
+    // Sobel(mono8_img, scharr, ddepth, 1, 0, ksize, scale, delta, BORDER_DEFAULT);
 
     pcl::PointXYZ center(t(0), t(1), t(2));
     float radius = RADIUS;
@@ -157,9 +192,9 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
             p(1) = (*merged)[pointIdxRadiusSearch[i]].y;
             p(2) = (*merged)[pointIdxRadiusSearch[i]].z;
             ROS_INFO("%ld points added to ceres solver\n", i);
-            if ((Cam_Proj * (_TCM * p))(0) >= 0 && (Cam_Proj * (_TCM * p))(1) >= 0 && (Cam_Proj * (_TCM * p))(0) <= cv_ptr1->image.rows && (Cam_Proj * (_TCM * p))(1) <= cv_ptr1->image.cols)
+            if ((Cam_Proj * (_TCM * p))(0) >= 0 && (Cam_Proj * (_TCM * p))(1) >= 0 && (Cam_Proj * (_TCM * p))(0) <= mono8_img.rows && (Cam_Proj * (_TCM * p))(1) <= mono8_img.cols)
             {
-                ceres::CostFunction *cost_func = new Localize(_TCM, p, cv_ptr1->image, cv_ptr2->image, D_Camera_Proj_fn, Cam_Proj);
+                ceres::CostFunction *cost_func = new Localize(_TCM, p, mono8_img, scharrX, scharrY, D_Camera_Proj_fn, Cam_Proj);
                 problem.AddResidualBlock(
                     cost_func,
                     nullptr,
