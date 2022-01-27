@@ -115,9 +115,9 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     // qt = tf_msg->transform.rotation;
     // t = tf_msg->transform.translation;
 
-    google::InitGoogleLogging("file_name");
+    // google::InitGoogleLogging("file_name");
     ceres::Problem problem;
-    double params[] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    double params[] = {0.001, 0.001, 0.001, 0.001, 0.001, 0.001};
 
     Eigen::Vector4f t, p;
     p(3) = 1;
@@ -132,7 +132,8 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     q.z() = tf_msg->pose.pose.orientation.z;
     q.w() = tf_msg->pose.pose.orientation.w;
 
-    Eigen::Matrix3f R = q.normalized().toRotationMatrix();
+    Eigen::Matrix3f R = q.toRotationMatrix(); // q.normalized().toRotationMatrix();
+    // ROS_INFO_STREAM("----------------------------------------\n"<<R.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]"))<<"\n----------------------------------------\n");
     Eigen::Matrix4f _TCM = Eigen::Matrix4f::Zero();
     for(int i=0; i<3; i++){
         for(int j=0; j<3; j++){
@@ -140,7 +141,9 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
         }
         _TCM(i,3) = t(i);
     }
-
+    _TCM(3,3) = 1;
+    // ROS_INFO_STREAM("----------------------------------------\n"<<t.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]"))<<"\n----------------------------------------\n");
+    // ROS_INFO_STREAM("----------------------------------------\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]"))<<"\n----------------------------------------\n");
     // _TCM.block<3, 3>(0, 0) = R;
     // _TCM.block<4, 1>(3, 0) = t; // Review
 
@@ -183,15 +186,15 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     float radius = RADIUS;
     std::vector<int> pointIdxRadiusSearch;
     std::vector<float> pointRadiusSquaredDistance;
-    ROS_INFO("Imaged read and now going into ceres solver.\n");
+    // ROS_INFO("Images read and now going into ceres solver.\n");
     if (global_octree.radiusSearch(center, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
     {
         for (std::size_t i = 0; i < pointIdxRadiusSearch.size(); ++i)
         {
-            p(0) = (*merged)[pointIdxRadiusSearch[i]].x;
-            p(1) = (*merged)[pointIdxRadiusSearch[i]].y;
-            p(2) = (*merged)[pointIdxRadiusSearch[i]].z;
-            ROS_INFO("%ld points added to ceres solver\n", i);
+            p(0) = (*merged)[pointIdxRadiusSearch[i]].x - t(0);
+            p(1) = (*merged)[pointIdxRadiusSearch[i]].y - t(1);
+            p(2) = (*merged)[pointIdxRadiusSearch[i]].z - t(2);
+            // ROS_INFO("%ld points added to ceres solver\n", i);
             if ((Cam_Proj * (_TCM * p))(0) >= 0 && (Cam_Proj * (_TCM * p))(1) >= 0 && (Cam_Proj * (_TCM * p))(0) <= mono8_img.rows && (Cam_Proj * (_TCM * p))(1) <= mono8_img.cols)
             {
                 ceres::CostFunction *cost_func = new Localize(_TCM, p, mono8_img, scharrX, scharrY, D_Camera_Proj_fn, Cam_Proj);
@@ -205,7 +208,7 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
         options.minimizer_progress_to_stdout = true;
 
         ceres::Solver::Summary summary;
-        ROS_INFO("Data loaded to the solver and solving is started\n");
+        // ROS_INFO("Data loaded to the solver and solving is started\n");
         ceres::Solve(options, &problem, &summary);
         ROS_INFO("Solved gg.\n");
     }
@@ -220,15 +223,18 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     teps(1, 3) = params[4];
     teps(2, 3) = params[5];
 
-    _TCM = teps * _TCM;
-    cout << _TCM << endl;
+    // ROS_INFO_STREAM("\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]")));
+    // _TCM = teps * _TCM;
+    // ROS_INFO_STREAM("\n\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]"))<<"\n----------------------------------------\n");
+    // cout << _TCM << endl;
 }
 
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "ceres_optimiser");
     ros::NodeHandle nh_ceres;
-
+    
+    google::InitGoogleLogging("file_name");
     Handler a(nh_ceres);
     a.run();
 
