@@ -9,6 +9,6 @@ Run using:
 ```
     roslaunch vins vins_rviz.launch
     rosrun vins vins_node ~/ws/src/VINS-Fusion/config/my_cam/mydata_mono.yaml
-    rosrun ceres_ceres_optimization final
+    rosrun ceres_optimization final
     rosbag play RGBD_LIDAR_bag_2.bag
 ```
