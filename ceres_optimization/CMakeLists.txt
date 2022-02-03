@@ -61,5 +61,7 @@ add_executable (final
   src/Localize.cpp 
   src/Handler.cpp
 )
-
 target_link_libraries(final ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES})
+
+add_executable(nonRos src/nonRos.cpp)
+target_link_libraries(nonRos ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES})

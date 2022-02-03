@@ -34,6 +34,10 @@
 #include <pcl/impl/point_types.hpp>
 
 #include "opencv2/core/core.hpp"
+#include "opencv2/calib3d/calib3d.hpp"
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <sensor_msgs/Image.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -83,5 +87,6 @@ private:
 
     PointCloud::Ptr merged;
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> global_octree;
+    int count;
     //pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> global_octree = pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>::OctreePointCloudSearch(128.0f);
 };
