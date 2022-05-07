@@ -1,0 +1,13 @@
+<launch>
+    <param name="/use_sim_time" value="true"/>
+    <node pkg="ceres_optimization" type="final" name="ceres_opt" output="log">
+        <rosparam command="load" file="$(dirname)/../config/parameters.yaml" />
+    </node>
+
+    <node pkg="ceres_optimization" type="test_ceres" name="ceres_test" output="screen">
+        <rosparam command="load" file="$(dirname)/../config/parameters.yaml" />
+    </node>
+
+    <node pkg="rosbag" type="play" name="player1" output="log" args="--clock -r 0.5 $(dirname)/../bags/2022-01-14-23-26-36.bag"/>
+    <node pkg="rosbag" type="play" name="player2" output="log" args="--clock -r 0.5 $(dirname)/../bags/in.bag"/>
+</launch>

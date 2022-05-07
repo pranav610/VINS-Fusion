@@ -8,6 +8,11 @@ using ceres::Solver;
 using namespace std;
 using namespace cv;
 #define RADIUS 20.0f
+// Stop ceres console output [https://stackoverflow.com/questions/62638201/suppress-ceres-logging-on-console]
+#define GLOG_logtostderr=1
+#define GLOG_stderrthreshold=3
+#define GLOG_minloglevel=3
+#define GLOG_v=-3
 
 void depthToCV8UC1(const cv::Mat& float_img, cv::Mat& mono8_img){
   //Process images
@@ -24,10 +29,9 @@ void depthToCV8UC1(const cv::Mat& float_img, cv::Mat& mono8_img){
 
 Handler::Handler(ros::NodeHandle &nodeHandle) : nh(nodeHandle), global_octree(pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>(128.0f))
 {
-    pub = nh.advertise<geometry_msgs::TransformStamped>("stereo_output", 10);
+    pub = nh.advertise<nav_msgs::Odometry>("stereo_output", 10);
     global_octree = pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>(128.0f);
     merged = PointCloud::Ptr(new PointCloud);
-    count = 0;
     if (!readParams())
     {
         ROS_INFO("Parameters were not read.");
@@ -117,7 +121,7 @@ void Handler::run()
     typedef message_filters::sync_policies::ApproximateTime<nav_msgs::Odometry, sensor_msgs::Image> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), vins_sub, depth_sub);
 
-    ROS_INFO("Subscribed topics now going into callback.\n");
+    // ROS_INFO("Subscribed topics now going into callback.\n");
     sync.registerCallback(boost::bind(&Handler::optimize, this, _1, _2));
     ros::spin();
 }
@@ -125,8 +129,7 @@ void Handler::run()
 void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
                        const sensor_msgs::Image::ConstPtr &depth_img)
 {   
-    count++;
-    ROS_INFO("Call back function is being called.\n");
+    // ROS_INFO("Call back function is being called.\n");
     // qt = tf_msg->transform.rotation;
     // t = tf_msg->transform.translation;
 
@@ -162,46 +165,22 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     // _TCM.block<3, 3>(0, 0) = R;
     // _TCM.block<4, 1>(3, 0) = t; // Review
 
-     cv_bridge::CvImagePtr cv_ptr;
-    //Convert from the ROS image message to a CvImage suitable for working with OpenCV for processing
+    cv_bridge::CvImageConstPtr cv_ptr;
     try
     {
-        //Always copy, returning a mutable CvImage
-        //OpenCV expects color images to use BGR channel order.
         cv_ptr = cv_bridge::toCvCopy(depth_img);
+
     }
     catch (cv_bridge::Exception& e)
     {
-        //if there is an error during conversion, display it
-        ROS_ERROR("tutorialROSOpenCV::main.cpp::cv_bridge exception: %s", e.what());
+        ROS_ERROR("cv_bridge exception: %s", e.what());
         return;
     }
 
-    //Copy the image.data to imageBuf.
     cv::Mat depth_float_img = cv_ptr->image;
-    cv::Mat mono8_img;
-    cv::Mat scharrX, scharrY;
-    depthToCV8UC1(depth_float_img, mono8_img);
-
-    // cv_bridge::CvImageConstPtr cv_ptr;
-    // try
-    // {
-    //     cv_ptr = cv_bridge::toCvShare(depth_img);
-
-    // }
-    // catch (cv_bridge::Exception& e)
-    // {
-    //     ROS_ERROR("cv_bridge exception: %s", e.what());
-    //     return;
-    // }
-
-    // Mat mono8_img = cv::Mat(cv_ptr->image.size(), CV_8UC1);
-    // Mat scharrX, scharrY;
-    // cv::convertScaleAbs(cv_ptr->image, mono8_img, 100, 0.0);
-
-    // cv_bridge::CvImagePtr cv_ptr1;
-    // cv_ptr1 = cv_bridge::toCvCopy(depth_img,sensor_msgs::image_encodings::BGR8);
-
+    // cv::Mat mono8_img;
+    cv::Mat scharrX(cv_ptr->image.size(), CV_32F), scharrY(cv_ptr->image.size(), CV_32F);
+    // depthToCV8UC1(depth_float_img, mono8_img);
 
     // cv_bridge::CvImagePtr cv_ptr1, cv_ptr2;
     // cv_ptr1 = cv_bridge::toCvCopy(depth_img);
@@ -211,29 +190,29 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     // depth_mono8_img = cv::Mat(depth_float_img.size(), CV_8UC1);}
     // cv::convertScaleAbs(depth_float_img, depth_mono8_img, 100, 0.0);
 
-    // cv_ptr1 = cv_bridge::toCvCopy(depth_img, std::string());
-    // cv_ptr2 = cv_bridge::toCvCopy(scharr_img, sensor_msgs::image_encodings::BGR8);
-    Scharr(mono8_img, scharrX, -1, 1, 0);
-    Scharr(mono8_img, scharrY, -1, 0, 1);
-    convertScaleAbs(scharrX, scharrX);
-    convertScaleAbs(scharrY, scharrY);
-    string name1, name2, name3, name4;
-    // name1 = "/home/pranav/ws/src/depth/depth1_";
-    // name1+=std::to_string(count);
-    // name1+=".png";
-    // imwrite(name1, mono8_img);
-    // name2 = "/home/pranav/ws/src/scharr/scharrX_";
-    // name2+=std::to_string(count);
-    // name2+=".png";
-    // imwrite(name2,scharrX);
-    // name3 = "/home/pranav/ws/src/scharr/scharrY_";
-    // name3+= std::to_string(count);
-    // name3+= ".png";
-    // imwrite(name3,scharrY);
-    // name1 = "/home/pranav/ws/src/depth/depth2_";
-    // name1+=std::to_string(count);
-    // name1+=".png";
-    // imwrite(name4, cv_ptr->image);
+    // Ref: https://gist.github.com/yikouniao/ee8230007d630fffe909
+    cv::Sobel(cv_ptr->image, scharrX, CV_32F, 1, 0, CV_SCHARR, 1, 0, BORDER_DEFAULT);
+    cv::Sobel(cv_ptr->image, scharrY, CV_32F, 0, 1, CV_SCHARR, 1, 0, BORDER_DEFAULT);
+    // convertScaleAbs(scharrX, scharrX);
+    // convertScaleAbs(scharrY, scharrY);
+    // std::string name0 = "/home/pagol1/Downloads/sample_stereo_imgs/depth/" + std::to_string(test_count) + ".tif";
+    // std::string name1 = "/home/pagol1/Downloads/sample_stereo_imgs/scharrX/" + std::to_string(test_count) + ".tif";
+    // std::string name2 = "/home/pagol1/Downloads/sample_stereo_imgs/scharrY/" + std::to_string(test_count++) + ".tif";
+
+    float max = 0.0, min = 1e3;
+    for(int i=0; i< cv_ptr->image.rows; i++)
+        for(int j=0; j<cv_ptr->image.cols; j++)
+            if(cv_ptr->image.at<float>(i,j) > max)
+                max = cv_ptr->image.at<float>(i,j);
+    for(int i=0; i< cv_ptr->image.rows; i++)
+        for(int j=0; j<cv_ptr->image.cols; j++)
+            if(cv_ptr->image.at<float>(i,j) < min)
+                min = cv_ptr->image.at<float>(i,j);
+
+    std::cout << "jha2: "<< max << " " << min << std::endl;
+    // cv::imwrite(name0, cv_ptr->image);
+    // cv::imwrite(name1, scharrX);
+    // cv::imwrite(name2, scharrY);
     // int ddepth = CV_16S;
     // int ksize = 3;
     // Sobel(mono8_img, scharr, ddepth, 1, 0, ksize, scale, delta, BORDER_DEFAULT);
@@ -242,18 +221,18 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     float radius = RADIUS;
     std::vector<int> pointIdxRadiusSearch;
     std::vector<float> pointRadiusSquaredDistance;
-    ROS_INFO("Images read and now going into ceres solver.\n");
+    // ROS_INFO("Images read and now going into ceres solver.\n");
     if (global_octree.radiusSearch(center, radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
     {
         for (std::size_t i = 0; i < pointIdxRadiusSearch.size(); ++i)
         {
-            p(0) = (*merged)[pointIdxRadiusSearch[i]].x - t(0);
-            p(1) = (*merged)[pointIdxRadiusSearch[i]].y - t(1);
-            p(2) = (*merged)[pointIdxRadiusSearch[i]].z - t(2);
+            p(0) = (*merged)[pointIdxRadiusSearch[i]].x;
+            p(1) = (*merged)[pointIdxRadiusSearch[i]].y;
+            p(2) = (*merged)[pointIdxRadiusSearch[i]].z;
             // ROS_INFO("%ld points added to ceres solver\n", i);
-            if ((Cam_Proj * (_TCM * p))(0) >= 0 && (Cam_Proj * (_TCM * p))(1) >= 0 && (Cam_Proj * (_TCM * p))(0) <= mono8_img.rows && (Cam_Proj * (_TCM * p))(1) <= mono8_img.cols)
+            if ((Cam_Proj * (_TCM * p))(0) >= 0 && (Cam_Proj * (_TCM * p))(1) >= 0 && (Cam_Proj * (_TCM * p))(0) <= cv_ptr->image.rows && (Cam_Proj * (_TCM * p))(1) <= cv_ptr->image.cols)
             {
-                ceres::CostFunction *cost_func = new Localize(_TCM, p, mono8_img, scharrX, scharrY, D_Camera_Proj_fn, Cam_Proj);
+                ceres::CostFunction *cost_func = new Localize(_TCM, p, cv_ptr->image, scharrX, scharrY, D_Camera_Proj_fn, Cam_Proj);
                 problem.AddResidualBlock(
                     cost_func,
                     nullptr,
@@ -265,8 +244,10 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
 
         ceres::Solver::Summary summary;
         // ROS_INFO("Data loaded to the solver and solving is started\n");
-        // ceres::Solve(options, &problem, &summary);
-        ROS_INFO("Solved gg.\n");
+        ceres::Solve(options, &problem, &summary);
+
+        // cout << summary.BriefReport();
+        // ROS_INFO("Solved gg.\n");
     }
     Eigen::Matrix4f teps = Eigen::Matrix4f::Identity();
     teps(0, 1) = -params[2];
@@ -279,10 +260,35 @@ void Handler::optimize(const nav_msgs::Odometry::ConstPtr &tf_msg,
     teps(1, 3) = params[4];
     teps(2, 3) = params[5];
 
-    ROS_INFO_STREAM("\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]")));
+    // ROS_INFO_STREAM("\t"<<params);
+    // ROS_INFO_STREAM("\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]")));
     _TCM = teps * _TCM;
-    ROS_INFO_STREAM("\n\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]"))<<"\n----------------------------------------\n");
-    cout << _TCM << endl;
+    // ROS_INFO_STREAM("\n\n"<<_TCM.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[", "]"))<<"\n----------------------------------------\n");
+    // cout << _TCM << endl;
+    Eigen::Matrix3f _R; Eigen::Vector3f _t; 
+
+    for (int i=0; i<3; ++i) {
+        for (int j=0; j<3; ++j) {
+            _R(i,j) = _TCM(i,j);
+        }
+        _t(i) = _TCM(i,3);
+    }
+
+    Eigen::Quaternionf _q(_R);
+    nav_msgs::Odometry _tf_msg;
+    _tf_msg.header.stamp = tf_msg->header.stamp;
+    _tf_msg.header.frame_id = tf_msg->header.frame_id;
+
+    _tf_msg.pose.pose.position.x = _t(0);
+    _tf_msg.pose.pose.position.y = _t(1);
+    _tf_msg.pose.pose.position.z = _t(2);
+
+    _tf_msg.pose.pose.orientation.x = _q.x();
+    _tf_msg.pose.pose.orientation.y = _q.y();
+    _tf_msg.pose.pose.orientation.z = _q.z();
+    _tf_msg.pose.pose.orientation.w = _q.w();
+
+    pub.publish(_tf_msg);
 }
 
 int main(int argc, char **argv)

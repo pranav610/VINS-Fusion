@@ -18,6 +18,7 @@
 
 #include <Eigen/Geometry>
 #include <Eigen/Dense>
+#include <Eigen/Core>
 #include <vector>
 #include <math.h>
 #include <string.h>
@@ -33,15 +34,12 @@
 #include <pcl/octree/octree_search.h>
 #include <pcl/impl/point_types.hpp>
 
+#include "opencv2/highgui.hpp"
 #include "opencv2/core/core.hpp"
-#include "opencv2/calib3d/calib3d.hpp"
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/imgcodecs.hpp>
 #include <sensor_msgs/Image.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
-
+#include <string>
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 using namespace std;
 using namespace cv;
@@ -49,7 +47,7 @@ using namespace cv;
 class Localize : public ceres::SizedCostFunction<1, 6>
 {
 public:
-    Localize(Eigen::Matrix4f &TCM, Eigen::Vector4f p, cv::Mat &disparity, cv::Mat &scharredX, cv::Mat &scharredY ,Eigen::Matrix<float, 3,4> &D_Camera_Proj_fn, Eigen::Matrix<float, 3,4> &Cam_Proj);
+    Localize(Eigen::Matrix4f &TCM, Eigen::Vector4f p, const cv::Mat &disparity, const cv::Mat &scharredX, const cv::Mat &scharredY ,Eigen::Matrix<float, 3,4> &D_Camera_Proj_fn, Eigen::Matrix<float, 3,4> &Cam_Proj);
     virtual ~Localize();
     virtual bool Evaluate(double const *const *parameters,
                           double *residuals,
@@ -79,7 +77,7 @@ private:
     Eigen::Matrix<float, 3,4> D_Camera_Proj_fn;
     Eigen::Matrix<float, 3,4> Cam_Proj;
     double fx, fy, s, cx, cy;
-
+    int test_count = 0;
     ros::NodeHandle nh;
     ros::Publisher pub;
 
@@ -87,6 +85,5 @@ private:
 
     PointCloud::Ptr merged;
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> global_octree;
-    int count;
     //pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> global_octree = pcl::octree::OctreePointCloudSearch<pcl::PointXYZ>::OctreePointCloudSearch(128.0f);
 };

@@ -4,7 +4,7 @@ project(ceres_optimization)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
+set(Ceres_DIR "/home/pagol1/Stuff/AGV/StereoCam/ceres-install/lib/cmake/Ceres")
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
 
@@ -61,7 +61,10 @@ add_executable (final
   src/Localize.cpp 
   src/Handler.cpp
 )
-target_link_libraries(final ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES})
 
-add_executable(nonRos src/nonRos.cpp)
-target_link_libraries(nonRos ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} ${CERES_LIBRARIES})
+add_executable(test_ceres
+  src/Test.cpp
+)
+
+target_link_libraries(final ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES_INCLUDE_DIRS} Ceres::ceres)
+target_link_libraries(test_ceres ${catkin_LIBRARIES})

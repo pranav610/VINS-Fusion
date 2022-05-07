@@ -1,0 +1,9 @@
+<launch>
+    <param name="/use_sim_time" value="true"/>
+    <node pkg="ceres_optimization" type="final" name="ceres_opt" output="screen">
+        <rosparam command="load" file="$(dirname)/../config/parameters.yaml" />
+    </node>
+    <node pkg="rosbag" type="play" name="player1" output="screen" args="--clock -r 0.5 $(dirname)/../bags/2022-01-14-23-26-36.bag"/>
+    <node pkg="rosbag" type="play" name="player2" output="screen" args="--clock -r 0.5 $(dirname)/../bags/in.bag"/>
+    <node pkg="rosbag" type="record" name="recorder1" output="screen" args="-o $(dirname)/../bags/output.bag stereo_output"/>
+</launch>
